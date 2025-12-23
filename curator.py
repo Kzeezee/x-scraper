@@ -63,10 +63,11 @@ async def curate_artist(driver, artist_url):
         if artist_handle_match:
             artist_handle = f"@{artist_handle_match.group(1)}"
             if artist_handle not in existing_handles:
-                # Wait for the username to be present on the profile page
-                user_name_element = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, 'h2[role="heading"] span'))
+                # Find the handle element, then navigate to find the name
+                handle_element = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, f"//span[text()='{artist_handle}']"))
                 )
+                user_name_element = handle_element.find_element(By.XPATH, "./../preceding-sibling::h2/span")
                 user_name = user_name_element.text
                 
                 print(f"Adding the artist being curated: {user_name} ({artist_handle})")
