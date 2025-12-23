@@ -1,39 +1,39 @@
-# Plan: Scrape X "For You" Timeline
+# X Scraper - Development Plan
 
-Goal: Use a logged-in browser session to scroll the **For You** tab and save tweets’ media + stats.
+## 1. Main Script CLI
 
-## Stack
+The `main.py` script will be updated to provide a command-line interface (CLI) with the following functions:
 
-- Python 3
-- Selenium for browser automation
-- `aiohttp` for concurrent media downloads
-- `python-dotenv` for config
-- Output: JSONL + media files
+*   **`scrape`**: This command will execute the existing functionality of scraping the "For You" timeline.
+*   **`curate`**: This command will be used for artist curation. It will take a Twitter profile URL as an argument.
 
-## Proposed Structure
+## 2. Artist Curation Functionality
 
-- `main.py`: Entry point, CLI parsing, orchestration.
-- `scraper.py`: Selenium logic for auth, scrolling, and data extraction.
-- `downloader.py`: `aiohttp`-based concurrent media downloading.
-- `config.py`: Loads credentials and settings from `.env`.
+A new module will be created to handle the artist curation process.
 
-## Core Steps
+### Inputs
 
-1. **Auth & Session**
-   - Load `X_USER` / `X_PASS` from a `.env` file.
-   - Log in and save session cookies to a file for reuse.
+*   A Twitter user's profile URL.
 
-2. **Scrolling & Extraction**
-   - Open **For You** tab (`https://x.com/home`).
-   - Loop: scroll, wait, collect new tweets. Stop on time/tweet limit or no new content.
-   - Robustly extract data (ID, author, text, stats, media URLs), handling missing elements gracefully.
+### Process
 
-3. **Download & Save**
-   - Use `downloader.py` to concurrently download all media from a batch of tweets.
-   - Implement retry logic for failed downloads.
-   - Append per-tweet JSON record to a `.jsonl` file.
-   - Save all collected data on graceful shutdown (e.g., Ctrl+C).
+1.  Navigate to the "Following" page of the provided Twitter user.
+2.  Iterate through the list of followed accounts.
+3.  For each account, extract the following metadata:
+    *   Username
+    *   User Handle (e.g., @username)
+    *   User Profile URL
+    *   Timestamp of when the data was captured.
+4.  Store the captured data in a persistent format (e.g., a CSV file).
+5.  Before storing, check for duplicates to ensure that each unique user is only recorded once.
 
-4. **Config & CLI**
-   - Script options: `--max-tweets`, `--max-minutes`, `--output-dir`, `--headless`.
-   - The entry script will orchestrate the flow: load config → scroll & extract → download → save.
+## 3. Data Storage
+
+*   A `data` directory will be used to store the outputs.
+*   The curated artist data will be stored in a CSV file named `curated_artists.csv`.
+*   The scraper's output will continue to be stored in its current format.
+
+## 4. Refactoring
+
+*   The existing scraper logic will be refactored to be more modular and easily callable from the `main.py` CLI.
+*   A new module, `curator.py`, will be created for the artist curation logic.
