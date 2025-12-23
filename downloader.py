@@ -69,7 +69,8 @@ async def download_media(media_urls: List[str], output_dir: str) -> List[Tuple[s
         tasks = []
         for url in media_urls:
             # Generate a base filename from the URL path, removing query params
-            base_filename = os.path.basename(urlparse(url).path)
+            base_filename_with_ext = os.path.basename(urlparse(url).path)
+            base_filename, _ = os.path.splitext(base_filename_with_ext)
             tasks.append(_fetch(session, url, base_filename))
         
         results = await asyncio.gather(*tasks)
