@@ -163,7 +163,11 @@ class XScraper:
                         "author": None,
                         "timestamp": None,
                         "text": None,
-                        "stats": {},
+                        "reply_count": 0,
+                        "repost_count": 0,
+                        "like_count": 0,
+                        "bookmark_count": 0,
+                        "view_count": 0,
                         "media_urls": [],
                     }
 
@@ -183,12 +187,20 @@ class XScraper:
                         stats_group = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["stats_group"])
                         aria_label = stats_group.get_attribute('aria-label')
                         if aria_label:
-                            stats = {}
                             for stat_name, pattern in STAT_PATTERNS.items():
                                 match = re.search(pattern, aria_label)
                                 if match:
-                                    stats[stat_name] = match.group(1).replace(',', '')
-                            tweet_data["stats"] = stats
+                                    # Map to new flattened fields
+                                    if stat_name == "reply":
+                                        tweet_data["reply_count"] = int(match.group(1).replace(',', ''))
+                                    elif stat_name == "repost":
+                                        tweet_data["repost_count"] = int(match.group(1).replace(',', ''))
+                                    elif stat_name == "like":
+                                        tweet_data["like_count"] = int(match.group(1).replace(',', ''))
+                                    elif stat_name == "bookmark":
+                                        tweet_data["bookmark_count"] = int(match.group(1).replace(',', ''))
+                                    elif stat_name == "view":
+                                        tweet_data["view_count"] = int(match.group(1).replace(',', ''))
                     except Exception:
                         pass # Silently fail if stats group not found
 

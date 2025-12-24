@@ -1,39 +1,40 @@
-# X Scraper - Development Plan
+# Plan for new 'select' feature
 
-## 1. Main Script CLI
+1.  **CLI Interface (`main.py`):**
+    *   Add a new subcommand `select` to the argument parser.
+    *   The `select` subcommand will have the following arguments:
+        *   `--input-dir`: Path to the directory containing `tweets.jsonl` and `media` folder. (Required)
+        *   `--output-dir`: Path to the directory where the selected data will be saved. (Required)
+        *   `--min-replies`: Minimum number of replies. (Default: 0)
+        *   `--min-reposts`: Minimum number of reposts. (Default: 0)
+        *   `--min-likes`: Minimum number of likes. (Default: 0)
+        *   `--min-bookmarks`: Minimum number of bookmarks. (Default: 0)
+        *   `--min-views`: Minimum number of views. (Default: 0)
+        *   `--sort-by`: How to sort the output `tweets.jsonl`. Options: `likes`, `views`. (Default: `views`)
+        *   `--action`: Whether to `copy` or `move` media files. Options: `copy`, `move`. (Default: `copy`)
 
-The `main.py` script will be updated to provide a command-line interface (CLI) with the following functions:
+2.  **Selection Logic (`selector.py`):**
+    *   Create a new file `selector.py`.
+    *   Implement a function `select_tweets` that takes the parsed arguments as input.
+    *   This function will:
+        *   Read the `tweets.jsonl` file from the `input-dir`.
+        *   Iterate through each tweet and check if it meets the filter criteria (`min-replies`, `min-reposts`, etc.).
+        *   Store the matching tweets in a list.
+        *   Sort the list of matching tweets based on the `sort-by` argument.
+        *   Create the `output-dir` if it doesn't exist.
+        *   Create a `selected` folder inside the `output-dir` for media.
+        *   Write the sorted list of tweets to a new `tweets.jsonl` file in the `output-dir`.
+        *   For each selected tweet, find the corresponding media in the `input-dir/media` folder.
+        *   Based on the `action` argument, either copy or move the media files to `output-dir/selected`.
 
-*   **`scrape`**: This command will execute the existing functionality of scraping the "For You" timeline.
-*   **`curate`**: This command will be used for artist curation. It will take a Twitter profile URL as an argument.
+3.  **Integration:**
+    *   In `main.py`, call the `select_tweets` function from `selector.py` when the `select` subcommand is used.
+    *   Pass the parsed arguments to the function.
 
-## 2. Artist Curation Functionality
-
-A new module will be created to handle the artist curation process.
-
-### Inputs
-
-*   A Twitter user's profile URL.
-
-### Process
-
-1.  Navigate to the "Following" page of the provided Twitter user.
-2.  Iterate through the list of followed accounts.
-3.  For each account, extract the following metadata:
-    *   Username
-    *   User Handle (e.g., @username)
-    *   User Profile URL
-    *   Timestamp of when the data was captured.
-4.  Store the captured data in a persistent format (e.g., a CSV file).
-5.  Before storing, check for duplicates to ensure that each unique user is only recorded once.
-
-## 3. Data Storage
-
-*   A `data` directory will be used to store the outputs.
-*   The curated artist data will be stored in a CSV file named `curated_artists.csv`.
-*   The scraper's output will continue to be stored in its current format.
-
-## 4. Refactoring
-
-*   The existing scraper logic will be refactored to be more modular and easily callable from the `main.py` CLI.
-*   A new module, `curator.py`, will be created for the artist curation logic.
+4.  **Testing:**
+    *   Create a sample directory with `tweets.jsonl` and a `media` folder to test the functionality.
+    *   Run the `select` command with different options to verify:
+        *   Correct filtering.
+        *   Correct sorting.
+        *   Correct file operations (`copy`/`move`).
+        *   Correct output structure.

@@ -7,6 +7,7 @@ import datetime
 from scraper import XScraper
 from downloader import download_media
 from curator import curate_recursively
+from selector import run_selector
 
 async def run_scraper(args):
     """Runs the X/Twitter timeline scraper."""
@@ -39,7 +40,7 @@ async def run_scraper(args):
 
             download_map = {url: path for url, path in downloaded_media_paths}
             
-            with open(jsonl_output_path, "a", encoding="utf-8") as f:
+            with open(jsonl_output_path, "w", encoding="utf-8") as f:
                 for tweet in collected_tweets:
                     local_media_paths = []
                     for original_url in tweet["media_urls"]:
@@ -91,6 +92,27 @@ async def main():
     parser_curate.add_argument("artist_url", type=str, help="The URL of the artist's profile to curate.")
     parser_curate.add_argument("--depth", type=int, default=1, help="The recursion depth for curating artists.")
 
+    # Selector command
+    parser_select = subparsers.add_parser("select", help="Select and filter tweets from a directory.")
+    parser_select.add_argument("--input-dir", type=str, required=True,
+                               help="Path to the directory containing tweets.jsonl and media folder.")
+    parser_select.add_argument("--output-dir", type=str, required=True,
+                               help="Path to the directory where the selected data will be saved.")
+    parser_select.add_argument("--min-replies", type=int, default=0,
+                               help="Minimum number of replies.")
+    parser_select.add_argument("--min-reposts", type=int, default=0,
+                               help="Minimum number of reposts.")
+    parser_select.add_argument("--min-likes", type=int, default=0,
+                               help="Minimum number of likes.")
+    parser_select.add_argument("--min-bookmarks", type=int, default=0,
+                               help="Minimum number of bookmarks.")
+    parser_select.add_argument("--min-views", type=int, default=0,
+                               help="Minimum number of views.")
+    parser_select.add_argument("--sort-by", type=str, default="views", choices=["likes", "views"],
+                               help="How to sort the output tweets.jsonl. Options: likes, views.")
+    parser_select.add_argument("--action", type=str, default="copy", choices=["copy", "move"],
+                               help="Whether to copy or move media files. Options: copy, move.")
+
     args = parser.parse_args()
 
     try:
@@ -98,6 +120,8 @@ async def main():
             await run_scraper(args)
         elif args.command == "curate":
             await run_curator(args)
+        elif args.command == "select":
+            await run_selector(args)
     except Exception:
         print(f"An error occurred:")
         traceback.print_exc()
