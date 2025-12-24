@@ -6,7 +6,7 @@ import traceback
 import datetime
 from scraper import XScraper
 from downloader import download_media
-from curator import curate_artist
+from curator import curate_recursively
 
 async def run_scraper(args):
     """Runs the X/Twitter timeline scraper."""
@@ -63,7 +63,7 @@ async def run_curator(args):
         scraper = XScraper(headless=args.headless)
         if scraper.login():
             print("Login successful. Starting curation...")
-            await curate_artist(scraper.driver, args.artist_url)
+            await curate_recursively(scraper.driver, args.artist_url, args.depth)
         else:
             print("Login failed. Exiting.")
     finally:
@@ -89,6 +89,7 @@ async def main():
     # Curator command
     parser_curate = subparsers.add_parser("curate", help="Curate artists by scraping their followed list.")
     parser_curate.add_argument("artist_url", type=str, help="The URL of the artist's profile to curate.")
+    parser_curate.add_argument("--depth", type=int, default=1, help="The recursion depth for curating artists.")
 
     args = parser.parse_args()
 

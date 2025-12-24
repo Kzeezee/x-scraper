@@ -23,6 +23,14 @@ TWEET_SELECTORS = {
     "stats_group": 'div[role="group"]', # As per user request
 }
 
+STAT_PATTERNS = {
+    "reply": r"([\d,]+)\s*(?:件の返信|repl(?:y|ies))",
+    "repost": r"([\d,]+)\s*(?:件のリポスト|repost(?:s)?)",
+    "like": r"([\d,]+)\s*(?:件のいいね|like(?:s)?)",
+    "bookmark": r"([\d,]+)\s*(?:件のブックマーク|bookmark(?:s)?)",
+    "view": r"([\d,]+)\s*(?:件の表示|view(?:s)?)",
+}
+
 class XScraper:
     def __init__(self, headless=True, cookie_file="cookies.json"):
         self.cookie_file = cookie_file
@@ -175,9 +183,12 @@ class XScraper:
                         stats_group = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["stats_group"])
                         aria_label = stats_group.get_attribute('aria-label')
                         if aria_label:
-                            stats_dict = dict([x.strip().split()[::-1] for x in aria_label.split(',')])
-                            cleaned_stats = {key.rstrip('s'): value for key, value in stats_dict.items()}
-                            tweet_data["stats"] = cleaned_stats
+                            stats = {}
+                            for stat_name, pattern in STAT_PATTERNS.items():
+                                match = re.search(pattern, aria_label)
+                                if match:
+                                    stats[stat_name] = match.group(1).replace(',', '')
+                            tweet_data["stats"] = stats
                     except Exception:
                         pass # Silently fail if stats group not found
 
