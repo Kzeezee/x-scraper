@@ -4,6 +4,7 @@ import json
 import os
 import traceback
 import datetime
+import csv
 from urllib.parse import quote
 from scraper import XScraper
 from downloader import download_media
@@ -58,50 +59,88 @@ async def run_scraper(args):
         if scraper:
             scraper.close()
 
+import csv
+
 async def run_user_scraper(args):
     """Runs the user-specific media scraper."""
-    # Build the search query
-    query_parts = [
-        f"from:{args.username}",
-        "filter:media",
-        "-filter:retweets"
-    ]
-    if args.min_likes > 0:
-        query_parts.append(f"min_faves:{args.min_likes}")
-    if args.since:
-        query_parts.append(f"since:{args.since}")
-    if args.until:
-        query_parts.append(f"until:{args.until}")
-    
-    search_query = " ".join(query_parts)
-    
-    # URL encode the query
-    encoded_query = quote(search_query)
-    
-    search_url = f"https://x.com/search?q={encoded_query}&src=typed_query&f=live"
-    
-    print(f"Constructed search URL: {search_url}")
+    if not args.username and not args.input_csv:
+        print("Error: Either --username or --input-csv must be provided.")
+        return
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_output_dir = os.path.join(args.output_dir, f"{args.username}_{timestamp}")
+    usernames = []
+    if args.username:
+        usernames.append(args.username)
+    elif args.input_csv:
+        try:
+            with open(args.input_csv, 'r', newline='', encoding='utf-8') as csvfile:
+                reader = csv.reader(csvfile)
+                next(reader)  # Skip header
+                for row in reader:
+                    if row:
+                        usernames.append(row[1].lstrip('@'))
+        except FileNotFoundError:
+            print(f"Error: Input CSV file not found at {args.input_csv}")
+            return
 
-    if not os.path.exists(run_output_dir):
-        os.makedirs(run_output_dir)
-    
-    jsonl_output_path = os.path.join(run_output_dir, "tweets.jsonl")
-    media_output_path = os.path.join(run_output_dir, "media")
-
+    total_tweets_scraped = 0
     scraper = None
     try:
         scraper = XScraper(headless=args.headless)
-        if scraper.login():
-            print("Login successful. Starting to scrape...")
+        if not scraper.login():
+            print("Login failed. Exiting.")
+            return
+        
+        print("Login successful. Starting to scrape...")
+
+        for username in usernames:
+            if args.max_tweets is not None and total_tweets_scraped >= args.max_tweets:
+                print("Global tweet limit reached. Stopping.")
+                break
+
+            print(f"Scraping tweets for user: {username}")
+
+            query_parts = [
+                f"from:{username}",
+                "filter:media",
+                "-filter:retweets"
+            ]
+            if args.min_likes > 0:
+                query_parts.append(f"min_faves:{args.min_likes}")
+            if args.since:
+                query_parts.append(f"since:{args.since}")
+            if args.until:
+                query_parts.append(f"until:{args.until}")
+            
+            search_query = " ".join(query_parts)
+            encoded_query = quote(search_query)
+            search_url = f"https://x.com/search?q={encoded_query}&src=typed_query&f=live"
+            
+            print(f"Constructed search URL: {search_url}")
+
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            run_output_dir = os.path.join(args.output_dir, f"{username}_{timestamp}")
+
+            if not os.path.exists(run_output_dir):
+                os.makedirs(run_output_dir)
+            
+            jsonl_output_path = os.path.join(run_output_dir, "tweets.jsonl")
+            media_output_path = os.path.join(run_output_dir, "media")
+
+            limit_per_artist = args.max_artist_tweets
+            if args.max_tweets is not None:
+                remaining_global_limit = args.max_tweets - total_tweets_scraped
+                if limit_per_artist is None:
+                    limit_per_artist = remaining_global_limit
+                else:
+                    limit_per_artist = min(limit_per_artist, remaining_global_limit)
+            
             collected_tweets = scraper.scrape_from_search(
                 search_url=search_url,
-                limit=args.limit
+                limit=limit_per_artist
             )
 
-            print(f"Scraped {len(collected_tweets)} tweets. Starting media download...")
+            total_tweets_scraped += len(collected_tweets)
+            print(f"Scraped {len(collected_tweets)} tweets for {username}. Starting media download...")
             
             all_media_urls = []
             for tweet in collected_tweets:
@@ -119,11 +158,9 @@ async def run_user_scraper(args):
                     tweet["media_local_paths"] = local_media_paths
                     f.write(json.dumps(tweet, ensure_ascii=False) + "\n")
             
-            print(f"Scraping complete. Data saved to {jsonl_output_path}")
+            print(f"Scraping for {username} complete. Data saved to {jsonl_output_path}")
             print(f"Downloaded media to {media_output_path}")
 
-        else:
-            print("Login failed. Exiting.")
     finally:
         if scraper:
             scraper.close()
@@ -185,11 +222,15 @@ async def main():
                                help="Whether to copy or move media files. Options: copy, move.")
 
     # User Scraper command
-    parser_user_scrape = subparsers.add_parser("user_scrape", help="Scrape media tweets from a specific user.")
-    parser_user_scrape.add_argument("--username", type=str, required=True,
+    parser_user_scrape = subparsers.add_parser("user_scrape", help="Scrape media tweets from a specific user or a list of users.")
+    parser_user_scrape.add_argument("--username", type=str, default=None,
                                     help="The X username of the target user.")
-    parser_user_scrape.add_argument("--limit", type=int, default=None,
-                                    help="Maximum number of recent tweets to scrape.")
+    parser_user_scrape.add_argument("--input-csv", type=str, default=None,
+                                    help="Path to a CSV file containing a list of artist handles.")
+    parser_user_scrape.add_argument("--max-tweets", type=int, default=None,
+                                    help="Maximum number of recent tweets to scrape globally.")
+    parser_user_scrape.add_argument("--max-artist-tweets", type=int, default=None,
+                                    help="Maximum number of recent tweets to scrape per artist.")
     parser_user_scrape.add_argument("--min-likes", type=int, default=0,
                                     help="Minimum number of likes for a tweet to be scraped.")
     parser_user_scrape.add_argument("--since", type=str, default=None,

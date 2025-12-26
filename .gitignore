@@ -5,3 +5,4 @@ __pycache__/
 data/
 cookies.json
 plans/
+*.csv

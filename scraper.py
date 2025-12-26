@@ -130,13 +130,28 @@ class XScraper:
         collected_tweets_data = []
         start_time = time.time()
         
-        # Set max_tweets to infinity if it's None (for unlimited scraping)
         max_tweets = max_tweets if max_tweets is not None else float('inf')
         max_minutes = max_minutes if max_minutes is not None else float('inf')
 
         print(f"Starting to scroll and extract tweets (Max tweets: {max_tweets if max_tweets != float('inf') else 'unlimited'}, Max minutes: {max_minutes if max_minutes != float('inf') else 'unlimited'})...")
 
+        last_tweet_count = 0
+        consecutive_stalls = 0
+        
         while len(collected_tweets_data) < max_tweets and (time.time() - start_time) < (max_minutes * 60):
+            # Check for rate limit message
+            try:
+                rate_limit_element = self.driver.find_element(By.XPATH, "//span[contains(text(), '問題が発生しました。再読み込みしてください。')]")
+                if rate_limit_element:
+                    print(f"Rate limit detected. Waiting for {config.RATE_LIMIT_DELAY} seconds...")
+                    time.sleep(config.RATE_LIMIT_DELAY)
+                    print("Resuming after rate limit...")
+                    self.driver.refresh()
+                    time.sleep(config.SEARCH_PAGE_LOAD_DELAY) # Wait for page to load after refresh
+                    continue
+            except:
+                pass # No rate limit element found
+
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(config.SCROLL_NEW_CONTENT_DELAY)
             
@@ -197,9 +212,15 @@ class XScraper:
                     print(f"Error processing a tweet: {e}")
                     continue
             
-            if len(tweets_on_page) == 0:
-                print("No new tweets found in this scroll, stopping.")
-                break
+            if len(collected_tweets_data) == last_tweet_count:
+                consecutive_stalls += 1
+                if consecutive_stalls >= config.SCROLL_MAX_STALLS:
+                    print("No new tweets found after multiple scrolls, stopping.")
+                    break
+            else:
+                consecutive_stalls = 0
+
+            last_tweet_count = len(collected_tweets_data)
 
         print(f"Finished scrolling. Total tweets collected: {len(collected_tweets_data)}")
         return collected_tweets_data
@@ -221,7 +242,7 @@ class XScraper:
         except:
             print("No tweets found for the given search criteria.")
             return []
-        time.sleep(config.SCROLL_INITIAL_LOAD_DELAY)
+        time.sleep(config.SEARCH_PAGE_LOAD_DELAY)
         
         return self._scroll_and_extract_tweets(max_tweets=limit)
 
