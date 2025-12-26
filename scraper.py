@@ -125,18 +125,16 @@ class XScraper:
             print(f"Login failed: {e}")
             return False
 
-    def scroll_and_extract(self, max_tweets=50, max_minutes=5):
-        if "home" not in self.driver.current_url:
-            print("Navigating to X home page (For You tab)...")
-            self.driver.get("https://x.com/home")
-            self.wait.until(EC.url_contains("home"))
-            time.sleep(config.SCROLL_INITIAL_LOAD_DELAY)
-
+    def _scroll_and_extract_tweets(self, max_tweets=None, max_minutes=None):
         seen_tweet_ids = set()
         collected_tweets_data = []
         start_time = time.time()
         
-        print(f"Starting to scroll and extract tweets (Max tweets: {max_tweets}, Max minutes: {max_minutes})...")
+        # Set max_tweets to infinity if it's None (for unlimited scraping)
+        max_tweets = max_tweets if max_tweets is not None else float('inf')
+        max_minutes = max_minutes if max_minutes is not None else float('inf')
+
+        print(f"Starting to scroll and extract tweets (Max tweets: {max_tweets if max_tweets != float('inf') else 'unlimited'}, Max minutes: {max_minutes if max_minutes != float('inf') else 'unlimited'})...")
 
         while len(collected_tweets_data) < max_tweets and (time.time() - start_time) < (max_minutes * 60):
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -144,7 +142,13 @@ class XScraper:
             
             tweets_on_page = self.driver.find_elements(By.CSS_SELECTOR, TWEET_SELECTORS["tweet_container"])
             
+            if not tweets_on_page:
+                print("No tweets found on page, stopping.")
+                break
+
             for tweet_element in tweets_on_page:
+                if len(collected_tweets_data) >= max_tweets:
+                    break
                 try:
                     tweet_url_element = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["tweet_id_url"])
                     tweet_url = tweet_url_element.get_attribute("href")
@@ -156,68 +160,35 @@ class XScraper:
                     if tweet_id in seen_tweet_ids: continue
                     seen_tweet_ids.add(tweet_id)
                     
-                    # Re-initialized the full tweet_data dictionary
                     tweet_data = {
-                        "id": tweet_id,
-                        "url": tweet_url,
-                        "author": None,
-                        "timestamp": None,
-                        "text": None,
-                        "reply_count": 0,
-                        "repost_count": 0,
-                        "like_count": 0,
-                        "bookmark_count": 0,
-                        "view_count": 0,
-                        "media_urls": [],
+                        "id": tweet_id, "url": tweet_url, "author": None, "timestamp": None,
+                        "text": None, "stats": {}, "media_urls": [],
                     }
 
-                    # Re-added extraction for author, timestamp, and text
-                    try:
-                        tweet_data["author"] = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["author_link"]).text
+                    try: tweet_data["author"] = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["author_link"]).text
                     except: pass
-                    try:
-                        tweet_data["timestamp"] = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["timestamp_link"]).get_attribute("datetime")
+                    try: tweet_data["timestamp"] = tweet_element.find_element(by=By.CSS_SELECTOR, value=TWEET_SELECTORS["timestamp_link"]).get_attribute("datetime")
                     except: pass
-                    try:
-                        tweet_data["text"] = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["text"]).text
+                    try: tweet_data["text"] = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["text"]).text
                     except: pass
 
-                    # User-requested stat extraction logic
                     try:
                         stats_group = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["stats_group"])
                         aria_label = stats_group.get_attribute('aria-label')
                         if aria_label:
                             for stat_name, pattern in STAT_PATTERNS.items():
-                                match = re.search(pattern, aria_label)
-                                if match:
-                                    # Map to new flattened fields
-                                    if stat_name == "reply":
-                                        tweet_data["reply_count"] = int(match.group(1).replace(',', ''))
-                                    elif stat_name == "repost":
-                                        tweet_data["repost_count"] = int(match.group(1).replace(',', ''))
-                                    elif stat_name == "like":
-                                        tweet_data["like_count"] = int(match.group(1).replace(',', ''))
-                                    elif stat_name == "bookmark":
-                                        tweet_data["bookmark_count"] = int(match.group(1).replace(',', ''))
-                                    elif stat_name == "view":
-                                        tweet_data["view_count"] = int(match.group(1).replace(',', ''))
-                    except Exception:
-                        pass # Silently fail if stats group not found
+                                match_stat = re.search(pattern, aria_label)
+                                if match_stat:
+                                    tweet_data["stats"][stat_name] = int(match_stat.group(1).replace(',', ''))
+                    except Exception: pass
 
-                    # Re-added media URL extraction
                     try:
                         media_elements = tweet_element.find_elements(By.CSS_SELECTOR, f'{TWEET_SELECTORS["media_img"]}, {TWEET_SELECTORS["media_video"]}')
                         for media_el in media_elements:
-                            if media_el.tag_name == 'img':
-                                src = media_el.get_attribute("src")
-                                if src and not src.startswith("data:"):
-                                    tweet_data["media_urls"].append(src)
-                            elif media_el.tag_name == 'video':
-                                src = media_el.get_attribute("src")
-                                if src:
-                                    tweet_data["media_urls"].append(src)
-                    except Exception:
-                        pass
+                            src = media_el.get_attribute("src")
+                            if src and not src.startswith("data:"):
+                                tweet_data["media_urls"].append(src)
+                    except Exception: pass
 
                     collected_tweets_data.append(tweet_data)
                     print(f"Collected tweet {len(collected_tweets_data)}: {tweet_id}")
@@ -229,12 +200,31 @@ class XScraper:
             if len(tweets_on_page) == 0:
                 print("No new tweets found in this scroll, stopping.")
                 break
-            
-            if len(collected_tweets_data) >= max_tweets: break
-            if (time.time() - start_time) >= (max_minutes * 60): break
 
         print(f"Finished scrolling. Total tweets collected: {len(collected_tweets_data)}")
         return collected_tweets_data
+
+    def scroll_and_extract(self, max_tweets=50, max_minutes=5):
+        if "home" not in self.driver.current_url:
+            print("Navigating to X home page (For You tab)...")
+            self.driver.get("https://x.com/home")
+            self.wait.until(EC.url_contains("home"))
+            time.sleep(config.SCROLL_INITIAL_LOAD_DELAY)
+        
+        return self._scroll_and_extract_tweets(max_tweets=max_tweets, max_minutes=max_minutes)
+
+    def scrape_from_search(self, search_url, limit=None):
+        print(f"Navigating to search URL: {search_url}")
+        self.driver.get(search_url)
+        try:
+            self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, TWEET_SELECTORS["tweet_container"])))
+        except:
+            print("No tweets found for the given search criteria.")
+            return []
+        time.sleep(config.SCROLL_INITIAL_LOAD_DELAY)
+        
+        return self._scroll_and_extract_tweets(max_tweets=limit)
+
 
     def close(self):
         if self.driver:

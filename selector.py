@@ -23,17 +23,19 @@ async def run_selector(args):
         for line in f:
             try:
                 tweet = json.loads(line)
-                if (tweet.get("reply_count", 0) >= args.min_replies and
-                    tweet.get("repost_count", 0) >= args.min_reposts and
-                    tweet.get("like_count", 0) >= args.min_likes and
-                    tweet.get("bookmark_count", 0) >= args.min_bookmarks and
-                    tweet.get("view_count", 0) >= args.min_views):
+                # Assuming stats are already integers from scraper.py
+                stats = tweet.get("stats", {})
+                if (stats.get("reply", 0) >= args.min_replies and
+                    stats.get("repost", 0) >= args.min_reposts and
+                    stats.get("like", 0) >= args.min_likes and
+                    stats.get("bookmark", 0) >= args.min_bookmarks and
+                    stats.get("view", 0) >= args.min_views):
                     selected_tweets.append(tweet)
             except json.JSONDecodeError:
                 print(f"Skipping invalid line in {input_jsonl_path}")
 
-    sort_key = "like_count" if args.sort_by == "likes" else "view_count"
-    selected_tweets.sort(key=lambda t: t.get(sort_key, 0), reverse=True)
+    sort_key_stat = "like" if args.sort_by == "likes" else "view"
+    selected_tweets.sort(key=lambda t: t.get("stats", {}).get(sort_key_stat, 0), reverse=True)
 
     with open(output_jsonl_path, "w", encoding="utf-8") as f:
         for tweet in selected_tweets:
