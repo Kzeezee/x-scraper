@@ -16,6 +16,7 @@ TWEET_SELECTORS = {
     "tweet_container": 'article[data-testid="tweet"]',
     "tweet_id_url": 'a[href*="/status/"]',
     "author_link": 'div[data-testid="User-Name"] a',
+    "author_handle": 'div[data-testid="User-Name"] > div:nth-child(2) a span',
     "timestamp_link": 'a > time',
     "text": 'div[data-testid="tweetText"]',
     "media_img": 'div[data-testid="tweetPhoto"] img',
@@ -176,11 +177,13 @@ class XScraper:
                     seen_tweet_ids.add(tweet_id)
                     
                     tweet_data = {
-                        "id": tweet_id, "url": tweet_url, "author": None, "timestamp": None,
+                        "id": tweet_id, "url": tweet_url, "author": None, "author_handle": None, "timestamp": None,
                         "text": None, "stats": {}, "media_urls": [],
                     }
 
                     try: tweet_data["author"] = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["author_link"]).text
+                    except: pass
+                    try: tweet_data["author_handle"] = tweet_element.find_element(By.CSS_SELECTOR, TWEET_SELECTORS["author_handle"]).text
                     except: pass
                     try: tweet_data["timestamp"] = tweet_element.find_element(by=By.CSS_SELECTOR, value=TWEET_SELECTORS["timestamp_link"]).get_attribute("datetime")
                     except: pass
